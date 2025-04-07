@@ -100,3 +100,74 @@ function getWeatherCondition(code: number): string {
   };
   return conditions[code] || 'Unknown';
 }
+
+export const japanTrainTool = createTool({
+  id: 'japan-train-info',
+  description: '日本の駅や路線の情報を取得します',
+  inputSchema: z.object({
+    station: z.string().describe('駅名（例：東京、新宿、大阪）'),
+  }),
+  outputSchema: z.object({
+    station: z.string(),
+    lines: z.array(z.string()),
+    prefecture: z.string(),
+    postalCode: z.string().optional(),
+    address: z.string().optional(),
+    nearbyStations: z.array(z.string()).optional(),
+  }),
+  execute: async ({ context }) => {
+    return await getStationInfo(context.station);
+  },
+});
+
+const getStationInfo = async (stationName: string) => {
+  const encodedStation = encodeURIComponent(stationName);
+  const apiUrl = `https://express.heartrails.com/api/json?method=getStations&name=${encodedStation}`;
+
+  const response = await fetch(apiUrl);
+  const data = await response.json();
+
+  if (!data.response.station || data.response.station.length === 0) {
+    throw new Error(`駅名 '${stationName}' が見つかりませんでした。`);
+  }
+
+  // Use the first station result
+  const station = data.response.station[0];
+
+  // Get unique line names from all matching stations
+  const allLines = new Set<string>();
+  data.response.station.forEach((s: { line: string }) => {
+    allLines.add(s.line);
+  });
+
+  // Get nearby stations (if available)
+  let nearbyStations: string[] = [];
+  try {
+    const nearbyUrl = `https://express.heartrails.com/api/json?method=getStations&x=${station.x}&y=${station.y}`;
+    const nearbyResponse = await fetch(nearbyUrl);
+    const nearbyData = await nearbyResponse.json();
+
+    if (nearbyData.response.station) {
+      // Filter out the original station and get unique station names
+      nearbyStations = Array.from(
+        new Set(
+          nearbyData.response.station
+            .filter((s: { name: string }) => s.name !== station.name)
+            .map((s: { name: string }) => s.name)
+        )
+      ).slice(0, 5); // Limit to 5 nearby stations
+    }
+  } catch (error) {
+    // If nearby stations can't be fetched, continue without them
+    console.error('Failed to fetch nearby stations:', error);
+  }
+
+  return {
+    station: station.name,
+    lines: Array.from(allLines),
+    prefecture: station.prefecture,
+    postalCode: station.postal,
+    address: `${station.prefecture}${station.city}${station.town || ''}`,
+    nearbyStations: nearbyStations.length > 0 ? nearbyStations : undefined,
+  };
+};
