@@ -4,7 +4,10 @@
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "dev": "mastra dev"
+    "dev": "mastra dev",
+    "deploy:cloudflare": "mastra deploy cloudflare",
+    "deploy:vercel": "mastra deploy vercel",
+    "build": "mastra build"
   },
   "keywords": [],
   "author": "",
